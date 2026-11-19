@@ -1,0 +1,12 @@
+#!/bin/sh
+# Example root-owned VPS deployment hook for a dedicated main-branch checkout.
+set -eu
+cd /opt/akshita
+sudo -u akshita git pull --ff-only origin main
+sudo -u akshita .venv/bin/pip install -r requirements.txt
+set -a
+. /etc/akshita/akshita.env
+set +a
+su -m -s /bin/sh akshita -c '/opt/akshita/.venv/bin/alembic upgrade head'
+systemctl restart akshita.service
+systemctl is-active --quiet akshita.service
