@@ -49,6 +49,27 @@ postgresql+asyncpg://akshita:URL_ENCODED_PASSWORD@127.0.0.1:5432/akshita
 
 Percent-encode special characters in the database password. The PostgreSQL database and user must exist before migration. Set `VIDEO_ENABLED=true` only after testing available CPU, bandwidth and group video-chat support. Audio is configured as 48 kHz stereo; video targets up to 720p/30 fps, with separate media inputs if the provider returns them. PyTgCalls/FFmpeg handle processing; Telegram may re-encode it.
 
+## Optional YouTube account access
+
+By default yt-dlp works **without a YouTube account**. To optionally use an account, configure a private Netscape-format browser cookies file; this is a browser session, not a separate yt-dlp account or API key. This feature does not ask for your Google password or 2FA code and does not bypass DRM, subscriptions, region restrictions or other provider controls.
+
+1. On a trusted computer, sign in to YouTube in a browser. Export its YouTube/Google cookies in **Netscape `cookies.txt` format** using a trusted local export method; see the [yt-dlp cookies FAQ](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp). An extension can access account sessions, so choose carefully. Export only the relevant cookies where possible. Do not paste cookies into Telegram, GitHub, logs or chat.
+2. Transfer the file securely to the VPS **outside the repository**, for example `/etc/akshita/youtube-cookies.txt`. Restrict it to the bot service account, e.g. owner `akshita` and mode `600`, and make sure the service user can traverse the parent directories. The file grants account access: protect it like a password and keep it out of images, backups and version control unless they are appropriately secured.
+3. Add `YTDLP_COOKIES_FILE=/etc/akshita/youtube-cookies.txt` to the service's protected environment file, then restart the bot. Leave it unset or empty to keep anonymous access. The bot validates the file at startup and reads it again for each extraction, so a safely replaced file is used on the next request. Changing the environment variable itself requires a restart. A missing or invalid configured file fails closed rather than falling back to anonymous mode.
+
+The file is loaded into an in-memory cookie jar and is not rewritten by the bot. Only YouTube/Google-related cookie domains are used; unrelated entries are ignored. Credentials are not saved in the playback database or sent as unscoped FFmpeg headers. Expired or revoked cookies need a fresh export; a valid file format does not prove the account is signed in. Authentication is shared across all groups using this bot, so any permitted group admin may request videos accessible to that account. Use a dedicated account and limit group access. Providers can change behavior, challenge accounts, rate-limit or restrict playback even with cookies. This feature has **not been tested with a live YouTube account**.
+
+For Docker Compose, set `YTDLP_COOKIES_FILE=/run/secrets/youtube-cookies.txt` in `.env` and add a read-only bind mount in a local Compose override:
+
+```yaml
+services:
+  bot:
+    volumes:
+      - /etc/akshita/youtube-cookies.txt:/run/secrets/youtube-cookies.txt:ro
+```
+
+The host file must be readable by container UID 10001 and its parent directory must be traversable. Do not put the cookies inside the repository or image. To disable account access, unset the variable and restart; delete the exported file securely and revoke browser sessions if the file may have been exposed.
+
 ## Commands and permissions
 
 `/start`, `/help` explain setup. In a group, administrators (or the configured owner) can use `/play <search or YouTube URL>`, `/vplay <search or URL>` (if enabled), `/pause`, `/resume`, `/skip`, `/stop` or `/end`, `/clear` (upcoming tracks only), `/volume 1–200`, `/loop`, and `/restart` (restarts the current queued track). `/queue` and `/nowplaying` show the queue to group members. Playback is admin-only to reduce abuse. Inline buttons independently recheck group admin permissions; favorites and queue viewing are available to members. A user's favorite is persisted but a browsing interface is not yet provided.
@@ -85,7 +106,7 @@ For PostgreSQL use `pg_dump` to a protected, encrypted backup location and regul
 ## Troubleshooting
 
 - **No assistant available:** check startup logs for validation failures, capacity, session revocation, network, and that the assistant is a group member. Restart to retry validation. Never post session strings.
-- **Playback cannot start:** check active group voice chat, permissions, FFmpeg/FFprobe, provider availability, and extraction restrictions. The queue is retained; use `/restart` after resolving the issue or `/stop` to clear it.
+- **Playback cannot start:** check active group voice chat, permissions, FFmpeg/FFprobe, provider availability, and extraction restrictions. If optional cookies are configured, check their file format, permissions and expiry; never paste their contents into logs or support requests. The queue is retained; use `/restart` after resolving the issue or `/stop` to clear it.
 - **Video fails or stutters:** disable video, test audio separately, and inspect VPS CPU/network and real group video support. There are no enforced video resource limits.
 - **Database errors:** check URL, server reachability, permissions and `alembic current`. Healthcheck is `python scripts/healthcheck.py` with `DATABASE_URL` in the environment. The application does not independently retry every failed database transaction.
 - **Leaked secret:** revoke the bot token or user sessions immediately, rotate credentials and encryption keys, and inspect access. Logging redacts configured credentials and URL query strings on a best-effort basis; never assume third-party output is perfectly sanitized.
@@ -100,4 +121,4 @@ alembic upgrade head && alembic check
 pip check
 ```
 
-Tests use simulated source/call clients and temporary SQLite databases; they cover isolation, queue limits, event handling, startup/disconnect failover, persistence/restart, permissions and response validation. They do **not** establish live API compatibility, video sync, FFmpeg crash behavior, transport quality, security under adversarial conditions, or realistic resource consumption. Run separate integration and endurance tests with test accounts, real voice chats and authorized provider access before deployment.
+Tests use simulated source/call clients and temporary SQLite databases; they cover isolation, queue limits, event handling, startup/disconnect failover, persistence/restart, permissions, response validation, and anonymous and cookie-configured extraction wiring. They do **not** establish live API compatibility, video sync, FFmpeg crash behavior, transport quality, security under adversarial conditions, or realistic resource consumption. Run separate integration and endurance tests with test accounts, real voice chats and authorized provider access before deployment.

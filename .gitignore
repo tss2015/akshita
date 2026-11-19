@@ -8,3 +8,8 @@ __pycache__/
 *.db
 *.sqlite3
 *.log
+
+# Never include exported browser authentication cookies.
+cookies.txt
+*.cookies.txt
+youtube-cookies.txt

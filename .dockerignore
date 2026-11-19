@@ -11,3 +11,8 @@ __pycache__
 .pytest_cache
 .ruff_cache
 tests
+
+# Never include exported browser authentication cookies.
+cookies.txt
+*.cookies.txt
+youtube-cookies.txt
