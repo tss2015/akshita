@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     database_url: str = 'sqlite+aiosqlite:///./akshita.db'
     max_queue: int = Field(default=100, ge=1, le=1000)
     extraction_concurrency: int = Field(default=3, ge=1, le=20)
+    ytdlp_cookies_file: str | None = None
     video_enabled: bool = False
     log_level: str = 'INFO'
 

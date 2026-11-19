@@ -12,7 +12,7 @@ from .config import Settings
 from .db import Database
 from .logging_utils import configure_logging
 from .player import PlayerManager
-from .sources import YouTube
+from .sources import CookieFileError, YouTube
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +31,11 @@ async def main():
     bot = None
     player = None
     try:
+        try:
+            source = YouTube(settings.extraction_concurrency, settings.ytdlp_cookies_file)
+        except CookieFileError:
+            log.error('YouTube cookies file is unreadable or invalid; check the server configuration.')
+            raise
         for number, session in enumerate(settings.sessions(), 1):
             client = Client(f'assistant-{number}', api_id=settings.api_id, api_hash=settings.api_hash.get_secret_value(), session_string=session, in_memory=True)
             try:
@@ -45,7 +50,7 @@ async def main():
         if not assistants:
             raise RuntimeError('No assistant could connect. Check sessions and network access.')
         pool = AssistantPool(assistants)
-        player = PlayerManager(db, YouTube(settings.extraction_concurrency), pool, settings.max_queue)
+        player = PlayerManager(db, source, pool, settings.max_queue)
         for assistant in assistants:
             async def on_end(_client, update, assistant=assistant):
                 await player.ended(update.chat_id, assistant)
