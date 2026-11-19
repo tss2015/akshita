@@ -1,0 +1,49 @@
+name: Experimental bot rotation
+on:
+  workflow_dispatch:
+  schedule:
+    # A new runner is requested every four hours. Schedules can be delayed or skipped.
+    - cron: '17 */4 * * *'
+permissions:
+  contents: read
+jobs:
+  bot:
+    # Explicit opt-in at repository level. Scheduled runs execute only on the default branch.
+    if: ${{ vars.ACTIONS_BOT_ENABLED == 'true' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 270
+    env:
+      API_ID: ${{ secrets.API_ID }}
+      API_HASH: ${{ secrets.API_HASH }}
+      BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      OWNER_ID: ${{ secrets.OWNER_ID }}
+      ASSISTANT_SESSIONS: ${{ secrets.ASSISTANT_SESSIONS }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      VIDEO_ENABLED: ${{ vars.VIDEO_ENABLED || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+      - name: Install FFmpeg and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install -r requirements.txt
+          python -m pip check
+      - name: Prepare optional YouTube cookies
+        env:
+          YOUTUBE_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        shell: bash
+        run: |
+          if [ -n "$YOUTUBE_COOKIES" ]; then
+            umask 077
+            printf '%s\n' "$YOUTUBE_COOKIES" > "$RUNNER_TEMP/youtube-cookies.txt"
+            printf 'YTDLP_COOKIES_FILE=%s\n' "$RUNNER_TEMP/youtube-cookies.txt" >> "$GITHUB_ENV"
+          fi
+      - name: Run one guarded streaming slot
+        run: exec python scripts/actions_bot_rotation.py
+      - name: Remove temporary YouTube cookies
+        if: ${{ always() }}
+        run: rm -f "$RUNNER_TEMP/youtube-cookies.txt"
